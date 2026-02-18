@@ -1,2 +1,2 @@
-"""Customer Finder - 帮技术创始人找到真实付费客户"""
+"""Customer Finder - Find target customers for your product."""
 __version__ = "0.1.0"

@@ -1,66 +1,56 @@
-from openai import OpenAI
-from typing import Dict, List
-import json
+from typing import List, Dict
 
-class CustomerAnalyzer:
-    def __init__(self, api_key: str):
-        self.client = OpenAI(api_key=api_key)
+def calculate_match_score(item: Dict, keyword: str) -> int:
+    """Calculate relevance score (0-100)."""
+    score = 0
+    keyword_lower = keyword.lower()
+    title_lower = item['title'].lower()
+    content_lower = item.get('content', '').lower()
     
-    def analyze_customer_persona(self, product_description: str) -> Dict:
-        """分析客户画像和关键词"""
-        prompt = f"""
-你是一个客户开发专家。基于以下产品描述，分析潜在付费客户：
-
-产品: {product_description}
-
-请以 JSON 格式输出：
-{{
-  "target_customers": "目标客户群体（具体职位/角色）",
-  "pain_points": "核心痛点（一句话）",
-  "keywords": ["关键词1", "关键词2", "关键词3", "关键词4", "关键词5"],
-  "platforms": ["最相关的平台1", "平台2", "平台3"]
-}}
-
-关键词要包含：问题关键词、解决方案关键词、竞品关键词。
-"""
-        
-        response = self.client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
-        )
-        
-        result = json.loads(response.choices[0].message.content)
-        return result
+    # Title match (40 points)
+    if keyword_lower in title_lower:
+        score += 40
+    else:
+        # Partial word match
+        words = keyword_lower.split()
+        matches = sum(1 for w in words if w in title_lower)
+        score += int(40 * matches / len(words))
     
-    def generate_outreach_templates(self, persona: Dict, channels: List[Dict]) -> List[Dict]:
-        """生成联系方式模板"""
-        templates = []
-        
-        for channel in channels[:3]:
-            prompt = f"""
-生成一个简短的联系模板（3-4句话），用于在 {channel['platform']} 的 {channel['community']} 社区联系潜在客户。
+    # Content match (30 points)
+    if keyword_lower in content_lower:
+        score += 30
+    else:
+        words = keyword_lower.split()
+        matches = sum(1 for w in words if w in content_lower)
+        score += int(30 * matches / max(len(words), 1))
+    
+    # Engagement score (30 points)
+    engagement = item.get('engagement', 0)
+    if engagement > 100:
+        score += 30
+    elif engagement > 50:
+        score += 20
+    elif engagement > 10:
+        score += 10
+    
+    return min(score, 100)
 
-客户画像: {persona['target_customers']}
-痛点: {persona['pain_points']}
+def get_match_level(score: int) -> str:
+    """Convert score to match level."""
+    if score >= 70:
+        return "High - Direct match"
+    elif score >= 40:
+        return "Medium - Related topic"
+    else:
+        return "Low - Tangential"
 
-要求：
-- 不要推销，先提供价值
-- 提到他们讨论的具体问题
-- 自然、非正式的语气
-- 包含一个具体问题或建议
-"""
-            
-            response = self.client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.8,
-                max_tokens=200
-            )
-            
-            templates.append({
-                "channel": f"{channel['platform']} - {channel['community']}",
-                "template": response.choices[0].message.content.strip()
-            })
-        
-        return templates
+def analyze_and_rank(results: List[Dict], keyword: str, limit: int) -> List[Dict]:
+    """Analyze and rank results by relevance."""
+    
+    for item in results:
+        item['score'] = calculate_match_score(item, keyword)
+        item['match_level'] = get_match_level(item['score'])
+    
+    # Sort by score and return top N
+    ranked = sorted(results, key=lambda x: x['score'], reverse=True)
+    return ranked[:limit]

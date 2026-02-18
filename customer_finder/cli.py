@@ -1,77 +1,60 @@
 import typer
 from rich.console import Console
 from rich.table import Table
-from pathlib import Path
+from typing import Optional, List
 import json
-from typing import Optional
+from pathlib import Path
 
-from .analyzer import CustomerAnalyzer
-from .scraper import PlatformScraper
-from .config import load_config
+from .searcher import search_all_platforms
+from .analyzer import analyze_and_rank
+from .generator import generate_outreach_templates
 
-app = typer.Typer(help="帮技术创始人找到产品的真实付费客户渠道")
+app = typer.Typer(help="Find target customers for your product")
 console = Console()
 
 @app.command()
-def analyze(
-    product_description: str = typer.Argument(..., help="产品描述"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="输出文件路径 (JSON)"),
-    limit: int = typer.Option(10, "--limit", "-l", help="每个平台的结果数量")
+def search(
+    keyword: str = typer.Argument(..., help="Product keyword to search"),
+    platforms: Optional[List[str]] = typer.Option(
+        None, "--platforms", "-p", help="Platforms to search (reddit, hn, ph)"
+    ),
+    limit: int = typer.Option(10, "--limit", "-l", help="Number of results to show"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Export results to JSON"),
 ):
-    """分析产品并找到潜在客户渠道"""
+    """Search for potential customer channels."""
     
-    try:
-        config = load_config()
-    except Exception as e:
-        console.print(f"[red]配置错误: {e}[/red]")
-        console.print("请创建 .env 文件并配置 API keys")
-        raise typer.Exit(1)
+    platforms = platforms or ["reddit", "hn", "ph"]
     
-    with console.status("[bold green]分析客户画像..."):
-        analyzer = CustomerAnalyzer(config["openai_api_key"])
-        persona = analyzer.analyze_customer_persona(product_description)
+    with console.status(f"[bold green]Searching {', '.join(platforms)}..."):
+        results = search_all_platforms(keyword, platforms)
     
-    console.print("\n📊 [bold]客户画像分析[/bold]")
-    console.print("━" * 50)
-    console.print(f"目标客户: {persona['target_customers']}")
-    console.print(f"痛点: {persona['pain_points']}")
-    console.print(f"关键词: {', '.join(persona['keywords'])}")
+    console.print(f"\n[bold]Found {len(results)} discussions[/bold]\n")
     
-    with console.status("[bold green]爬取平台数据..."):
-        scraper = PlatformScraper(config)
-        channels = scraper.scrape_all_platforms(persona['keywords'], limit)
+    with console.status("[bold green]Analyzing discussions..."):
+        ranked = analyze_and_rank(results, keyword, limit)
     
-    console.print("\n🎯 [bold]优先级渠道清单[/bold]")
-    console.print("━" * 50)
+    with console.status("[bold green]Generating outreach templates..."):
+        for item in ranked:
+            item['template'] = generate_outreach_templates(item, keyword)
     
-    for idx, channel in enumerate(channels, 1):
-        priority_emoji = "🔥" if channel['priority'] == "高" else "⭐" if channel['priority'] == "中" else "💡"
-        console.print(f"\n{idx}. {priority_emoji} {channel['platform']} - {channel['community']}")
-        console.print(f"   优先级: {channel['priority']}")
-        console.print(f"   相关讨论: {channel['discussion_count']} 条")
-        console.print(f"   关键词匹配: {', '.join(channel['matched_keywords'][:3])}")
-        
-        if channel['top_posts']:
-            console.print(f"   热门帖子: {channel['top_posts'][0]['title'][:60]}...")
-            console.print(f"   链接: {channel['top_posts'][0]['url']}")
+    # Display results
+    console.print("[bold cyan]🎯 Top Potential Channels[/bold]\n")
     
-    with console.status("[bold green]生成联系模板..."):
-        templates = analyzer.generate_outreach_templates(persona, channels[:3])
+    for idx, item in enumerate(ranked, 1):
+        console.print(f"[bold yellow]{idx}. {item['channel']}[/bold] (Score: {item['score']}/100)")
+        console.print(f"   Platform: {item['platform']}")
+        console.print(f"   Title: {item['title'][:80]}...")
+        console.print(f"   Engagement: {item['engagement']} interactions")
+        console.print(f"   Match: {item['match_level']}")
+        console.print(f"   URL: {item['url']}")
+        console.print(f"\n   [bold]Outreach Template:[/bold]")
+        console.print(f"   {item['template'][:200]}...\n")
     
-    console.print("\n📧 [bold]联系方式模板[/bold]")
-    console.print("━" * 50)
-    for template in templates:
-        console.print(f"\n[cyan]{template['channel']}[/cyan]")
-        console.print(template['template'])
-    
+    # Export if requested
     if output:
-        result = {
-            "persona": persona,
-            "channels": channels,
-            "templates": templates
-        }
-        output.write_text(json.dumps(result, ensure_ascii=False, indent=2))
-        console.print(f"\n✅ 结果已保存到: {output}")
+        with open(output, 'w') as f:
+            json.dump(ranked, f, indent=2)
+        console.print(f"[green]✓ Results exported to {output}[/green]")
 
 if __name__ == "__main__":
     app()
