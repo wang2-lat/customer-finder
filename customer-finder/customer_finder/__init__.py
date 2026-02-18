@@ -1,2 +1,2 @@
-"""Customer Finder - 自动发现潜在付费客户的 CLI 工具"""
+"""Customer Finder - 帮技术创始人找到真实付费客户"""
 __version__ = "0.1.0"

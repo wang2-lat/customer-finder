@@ -1,13 +1,15 @@
 [project]
 name = "customer-finder"
 version = "0.1.0"
-description = "自动发现和验证潜在付费客户的 CLI 工具"
+description = "帮技术创始人找到产品的真实付费客户渠道"
 requires-python = ">=3.9"
 dependencies = [
     "typer>=0.9.0",
     "praw>=7.7.0",
+    "beautifulsoup4>=4.12.0",
     "requests>=2.31.0",
-    "rich>=13.7.0",
+    "pandas>=2.0.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [project.scripts]

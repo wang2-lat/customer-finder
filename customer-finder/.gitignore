@@ -1,25 +1,20 @@
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
 .env
-*.egg-info/
+*.csv
+__pycache__/
+*.pyc
+.DS_Store
 dist/
 build/
-customers.json
-outreach.txt
-# 1. 安装依赖
+*.egg-info/
+# 1. 安装项目
 cd customer-finder
 pip install -e .
 
-# 2. 配置 API（复制 .env.example 为 .env 并填写）
-cp .env.example .env
+# 2. 配置Reddit API
+customer-finder setup
 
-# 3. 测试搜索
-customer-finder search "project management" --platforms reddit --limit 10
+# 3. 测试运行
+customer-finder find "AI代码审查工具" --reddit-limit 10
 
-# 4. 生成话术
-customer-finder generate-outreach customers.json --product "我的产品"
+# 4. 检查输出
+cat customers.csv

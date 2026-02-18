@@ -1,117 +1,74 @@
 import typer
-import json
 from pathlib import Path
-from typing import Optional, List
-from rich.console import Console
-from rich.table import Table
+from typing import Optional
+from .scraper import RedditScraper, ProductHuntScraper
+from .analyzer import CustomerProfileAnalyzer
+from .exporter import CSVExporter
 
-from .scrapers import RedditScraper, HackerNewsScraper, ProductHuntScraper
-from .analyzer import CustomerAnalyzer
-from .outreach import OutreachGenerator
+app = typer.Typer(help="帮技术创始人找到产品的真实付费客户渠道")
 
-app = typer.Typer(help="自动发现和验证潜在付费客户的 CLI 工具")
-console = Console()
 
 @app.command()
-def search(
-    keywords: str = typer.Argument(..., help="产品关键词"),
-    platforms: Optional[List[str]] = typer.Option(
-        ["reddit", "hackernews", "producthunt"],
-        "--platforms",
-        "-p",
-        help="搜索平台"
-    ),
-    days: int = typer.Option(30, "--days", "-d", help="搜索最近 N 天"),
-    min_score: int = typer.Option(3, "--min-score", "-s", help="最低评分"),
-    output: Path = typer.Option("customers.json", "--output", "-o", help="输出文件"),
-    limit: int = typer.Option(50, "--limit", "-l", help="每平台最多结果数"),
+def find(
+    product_description: str = typer.Argument(..., help="产品描述，例如：'AI代码审查工具'"),
+    output: Path = typer.Option("customers.csv", "--output", "-o", help="输出CSV文件路径"),
+    reddit_limit: int = typer.Option(50, "--reddit-limit", help="Reddit搜索结果数量"),
+    ph_limit: int = typer.Option(20, "--ph-limit", help="ProductHunt搜索结果数量"),
 ):
-    """搜索潜在客户"""
-    console.print(f"[bold green]搜索关键词:[/bold green] {keywords}")
-    console.print(f"[bold green]平台:[/bold green] {', '.join(platforms)}")
+    """根据产品描述查找潜在付费客户"""
     
-    all_results = []
+    typer.echo(f"🔍 分析产品: {product_description}")
     
-    # Reddit
-    if "reddit" in platforms:
-        with console.status("[bold yellow]正在搜索 Reddit..."):
-            try:
-                scraper = RedditScraper()
-                results = scraper.search(keywords, days=days, limit=limit)
-                all_results.extend(results)
-                console.print(f"[green]✓[/green] Reddit: 找到 {len(results)} 条结果")
-            except Exception as e:
-                console.print(f"[red]✗[/red] Reddit 错误: {e}")
+    # 1. 生成客户画像和搜索关键词
+    analyzer = CustomerProfileAnalyzer()
+    profile = analyzer.generate_profile(product_description)
+    typer.echo(f"✅ 客户画像: {profile['persona']}")
+    typer.echo(f"🔑 搜索关键词: {', '.join(profile['keywords'])}")
     
-    # HackerNews
-    if "hackernews" in platforms:
-        with console.status("[bold yellow]正在搜索 HackerNews..."):
-            try:
-                scraper = HackerNewsScraper()
-                results = scraper.search(keywords, days=days, limit=limit)
-                all_results.extend(results)
-                console.print(f"[green]✓[/green] HackerNews: 找到 {len(results)} 条结果")
-            except Exception as e:
-                console.print(f"[red]✗[/red] HackerNews 错误: {e}")
+    # 2. 爬取Reddit讨论
+    typer.echo("\n📡 正在爬取 Reddit...")
+    reddit_scraper = RedditScraper()
+    reddit_leads = reddit_scraper.search(profile['keywords'], limit=reddit_limit)
+    typer.echo(f"✅ 找到 {len(reddit_leads)} 条 Reddit 线索")
     
-    # ProductHunt
-    if "producthunt" in platforms:
-        with console.status("[bold yellow]正在搜索 ProductHunt..."):
-            try:
-                scraper = ProductHuntScraper()
-                results = scraper.search(keywords, days=days, limit=limit)
-                all_results.extend(results)
-                console.print(f"[green]✓[/green] ProductHunt: 找到 {len(results)} 条结果")
-            except Exception as e:
-                console.print(f"[red]✗[/red] ProductHunt 错误: {e}")
+    # 3. 爬取ProductHunt
+    typer.echo("\n📡 正在爬取 ProductHunt...")
+    ph_scraper = ProductHuntScraper()
+    ph_leads = ph_scraper.search(profile['keywords'], limit=ph_limit)
+    typer.echo(f"✅ 找到 {len(ph_leads)} 条 ProductHunt 线索")
     
-    # 分析和过滤
-    analyzer = CustomerAnalyzer()
-    customers = analyzer.analyze(all_results, min_score=min_score)
-    
-    # 保存结果
-    output.write_text(json.dumps(customers, indent=2, ensure_ascii=False))
-    console.print(f"\n[bold green]✓ 找到 {len(customers)} 个潜在客户[/bold green]")
-    console.print(f"[bold]结果已保存到:[/bold] {output}")
-    
-    # 显示预览
-    if customers:
-        table = Table(title="潜在客户预览（前 5 条）")
-        table.add_column("平台", style="cyan")
-        table.add_column("作者", style="magenta")
-        table.add_column("标题", style="green")
-        table.add_column("评分", style="yellow")
-        
-        for customer in customers[:5]:
-            table.add_row(
-                customer["platform"],
-                customer["author"],
-                customer["title"][:50] + "..." if len(customer["title"]) > 50 else customer["title"],
-                str(customer["score"])
-            )
-        
-        console.print(table)
-
-@app.command()
-def generate_outreach(
-    input_file: Path = typer.Argument(..., help="客户列表 JSON 文件"),
-    product: str = typer.Option(..., "--product", "-p", help="你的产品名称"),
-    output: Path = typer.Option("outreach.txt", "--output", "-o", help="输出文件"),
-):
-    """生成个性化触达话术"""
-    if not input_file.exists():
-        console.print(f"[red]错误:[/red] 文件不存在: {input_file}")
+    # 4. 合并并导出
+    all_leads = reddit_leads + ph_leads
+    if not all_leads:
+        typer.echo("❌ 未找到任何潜在客户，请尝试调整产品描述", err=True)
         raise typer.Exit(1)
     
-    customers = json.loads(input_file.read_text())
-    generator = OutreachGenerator(product)
+    exporter = CSVExporter()
+    exporter.export(all_leads, output)
+    typer.echo(f"\n✅ 已导出 {len(all_leads)} 条线索到: {output}")
+    typer.echo(f"💡 下一步: 打开CSV文件，筛选高质量线索后发送个性化邮件")
+
+
+@app.command()
+def setup():
+    """配置Reddit API密钥"""
+    typer.echo("🔧 Reddit API 配置向导")
+    typer.echo("\n请访问: https://www.reddit.com/prefs/apps")
+    typer.echo("1. 点击 'create another app'")
+    typer.echo("2. 选择 'script' 类型")
+    typer.echo("3. 复制 client_id 和 client_secret\n")
     
-    with console.status("[bold yellow]正在生成触达话术..."):
-        outreach_messages = generator.generate(customers)
+    client_id = typer.prompt("Reddit Client ID")
+    client_secret = typer.prompt("Reddit Client Secret", hide_input=True)
     
-    output.write_text(outreach_messages)
-    console.print(f"[bold green]✓ 已生成 {len(customers)} 条触达话术[/bold green]")
-    console.print(f"[bold]结果已保存到:[/bold] {output}")
+    env_content = f"""REDDIT_CLIENT_ID={client_id}
+REDDIT_CLIENT_SECRET={client_secret}
+REDDIT_USER_AGENT=customer-finder/0.1.0
+"""
+    
+    Path(".env").write_text(env_content)
+    typer.echo("✅ 配置已保存到 .env 文件")
+
 
 if __name__ == "__main__":
     app()
