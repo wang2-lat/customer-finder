@@ -2,11 +2,11 @@ import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict
-import praw
 import requests
 
 class RedditScraper:
     def __init__(self):
+        import praw
         self.reddit = praw.Reddit(
             client_id=os.getenv("REDDIT_CLIENT_ID"),
             client_secret=os.getenv("REDDIT_CLIENT_SECRET"),
@@ -36,8 +36,10 @@ class RedditScraper:
                         "url": f"https://reddit.com{submission.permalink}",
                         "score": submission.score,
                         "created_at": created.isoformat(),
-                        "contact": f"https://reddit.com/user/{submission.author}"
+                        "contact": f"https://reddit.com/user/{submission.author}",
+                        "subreddit": subreddit_name
                     })
+                
                 time.sleep(1)  # 避免限流
             except Exception as e:
                 print(f"Reddit subreddit {subreddit_name} 错误: {e}")
@@ -71,11 +73,11 @@ class HackerNewsScraper:
                     "platform": "hackernews",
                     "author": hit.get("author", "unknown"),
                     "title": hit.get("title") or hit.get("story_title", ""),
-                    "content": hit.get("comment_text", "")[:500],
+                    "content": hit.get("comment_text", "")[:500] or hit.get("story_text", "")[:500],
                     "url": f"https://news.ycombinator.com/item?id={hit['objectID']}",
                     "score": hit.get("points", 0),
-                    "created_at": hit.get("created_at", ""),
-                    "contact": f"https://news.ycombinator.com/user?id={hit.get('author')}"
+                    "created_at": hit.get("created_at"),
+                    "contact": f"https://news.ycombinator.com/user?id={hit.get('author', '')}"
                 })
         except Exception as e:
             print(f"HackerNews 错误: {e}")
@@ -94,6 +96,6 @@ class ProductHuntScraper:
             return []
         
         results = []
-        # ProductHunt API 需要 GraphQL 查询，这里简化处理
-        # 实际使用时需要完整实现 GraphQL 查询
+        # ProductHunt API 需要 GraphQL 查询，这里简化为返回空列表
+        # 实际使用需要实现完整的 GraphQL 查询
         return results

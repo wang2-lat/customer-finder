@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, List
 from rich.console import Console
 from rich.table import Table
+
 from .scrapers import RedditScraper, HackerNewsScraper, ProductHuntScraper
 from .analyzer import CustomerAnalyzer
 from .outreach import OutreachGenerator
@@ -16,23 +17,24 @@ def search(
     keywords: str = typer.Argument(..., help="产品关键词"),
     platforms: Optional[List[str]] = typer.Option(
         ["reddit", "hackernews", "producthunt"],
-        "--platforms", "-p",
+        "--platforms",
+        "-p",
         help="搜索平台"
     ),
     days: int = typer.Option(30, "--days", "-d", help="搜索最近 N 天"),
     min_score: int = typer.Option(3, "--min-score", "-s", help="最低评分"),
     output: Path = typer.Option("customers.json", "--output", "-o", help="输出文件"),
-    limit: int = typer.Option(50, "--limit", "-l", help="每平台最多结果数")
+    limit: int = typer.Option(50, "--limit", "-l", help="每平台最多结果数"),
 ):
     """搜索潜在客户"""
-    console.print(f"[bold blue]搜索关键词:[/bold blue] {keywords}")
-    console.print(f"[bold blue]平台:[/bold blue] {', '.join(platforms)}")
+    console.print(f"[bold green]搜索关键词:[/bold green] {keywords}")
+    console.print(f"[bold green]平台:[/bold green] {', '.join(platforms)}")
     
     all_results = []
     
     # Reddit
     if "reddit" in platforms:
-        with console.status("[bold green]正在搜索 Reddit..."):
+        with console.status("[bold yellow]正在搜索 Reddit..."):
             try:
                 scraper = RedditScraper()
                 results = scraper.search(keywords, days=days, limit=limit)
@@ -43,7 +45,7 @@ def search(
     
     # HackerNews
     if "hackernews" in platforms:
-        with console.status("[bold green]正在搜索 HackerNews..."):
+        with console.status("[bold yellow]正在搜索 HackerNews..."):
             try:
                 scraper = HackerNewsScraper()
                 results = scraper.search(keywords, days=days, limit=limit)
@@ -54,7 +56,7 @@ def search(
     
     # ProductHunt
     if "producthunt" in platforms:
-        with console.status("[bold green]正在搜索 ProductHunt..."):
+        with console.status("[bold yellow]正在搜索 ProductHunt..."):
             try:
                 scraper = ProductHuntScraper()
                 results = scraper.search(keywords, days=days, limit=limit)
@@ -65,12 +67,12 @@ def search(
     
     # 分析和过滤
     analyzer = CustomerAnalyzer()
-    customers = analyzer.analyze(all_results, keywords, min_score=min_score)
+    customers = analyzer.analyze(all_results, min_score=min_score)
     
     # 保存结果
     output.write_text(json.dumps(customers, indent=2, ensure_ascii=False))
-    console.print(f"\n[bold green]✓[/bold green] 找到 {len(customers)} 个潜在客户")
-    console.print(f"[bold blue]结果已保存到:[/bold blue] {output}")
+    console.print(f"\n[bold green]✓ 找到 {len(customers)} 个潜在客户[/bold green]")
+    console.print(f"[bold]结果已保存到:[/bold] {output}")
     
     # 显示预览
     if customers:
@@ -84,7 +86,7 @@ def search(
             table.add_row(
                 customer["platform"],
                 customer["author"],
-                customer["title"][:50] + "...",
+                customer["title"][:50] + "..." if len(customer["title"]) > 50 else customer["title"],
                 str(customer["score"])
             )
         
@@ -94,7 +96,7 @@ def search(
 def generate_outreach(
     input_file: Path = typer.Argument(..., help="客户列表 JSON 文件"),
     product: str = typer.Option(..., "--product", "-p", help="你的产品名称"),
-    output: Path = typer.Option("outreach.txt", "--output", "-o", help="输出文件")
+    output: Path = typer.Option("outreach.txt", "--output", "-o", help="输出文件"),
 ):
     """生成个性化触达话术"""
     if not input_file.exists():
@@ -104,14 +106,12 @@ def generate_outreach(
     customers = json.loads(input_file.read_text())
     generator = OutreachGenerator(product)
     
-    outreach_messages = []
-    for customer in customers:
-        message = generator.generate(customer)
-        outreach_messages.append(f"--- {customer['author']} ({customer['platform']}) ---\n{message}\n")
+    with console.status("[bold yellow]正在生成触达话术..."):
+        outreach_messages = generator.generate(customers)
     
-    output.write_text("\n".join(outreach_messages))
-    console.print(f"[bold green]✓[/bold green] 已生成 {len(outreach_messages)} 条触达话术")
-    console.print(f"[bold blue]结果已保存到:[/bold blue] {output}")
+    output.write_text(outreach_messages)
+    console.print(f"[bold green]✓ 已生成 {len(customers)} 条触达话术[/bold green]")
+    console.print(f"[bold]结果已保存到:[/bold] {output}")
 
 if __name__ == "__main__":
     app()
