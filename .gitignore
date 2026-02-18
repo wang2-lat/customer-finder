@@ -1,17 +1,22 @@
 .env
-*.json
 __pycache__/
 *.pyc
-.DS_Store
-venv/
+*.pyo
+*.egg-info/
+dist/
+build/
 .venv/
-# 测试安装
-python customer_finder.py --help
+venv/
+*.json
+# 1. 安装依赖
+pip install typer openai praw requests beautifulsoup4 rich
 
-# 小规模测试
-python customer_finder.py find \
-  --product "测试产品" \
-  --limit 10
+# 2. 配置 API keys
+cp .env.example .env
+# 编辑 .env 填入你的 OpenAI API key
 
-# 查看结果
-python customer_finder.py show leads.json
+# 3. 测试运行
+python -m customer_finder.cli analyze "我做了一个帮开发者自动生成 API 文档的工具"
+
+# 4. 检查输出
+# 应该看到客户画像、渠道清单、联系模板

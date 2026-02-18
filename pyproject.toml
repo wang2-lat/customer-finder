@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "customer-finder"
+version = "0.1.0"
+description = "帮技术创始人找到产品的真实付费客户渠道"
+authors = ["Your Name <you@example.com>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+typer = "^0.9.0"
+openai = "^1.12.0"
+praw = "^7.7.1"
+requests = "^2.31.0"
+beautifulsoup4 = "^4.12.0"
+rich = "^13.7.0"
+
+[tool.poetry.scripts]
+customer-finder = "customer_finder.cli:app"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
