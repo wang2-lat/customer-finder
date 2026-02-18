@@ -1,0 +1,17 @@
+.env
+*.json
+__pycache__/
+*.pyc
+.DS_Store
+venv/
+.venv/
+# 测试安装
+python customer_finder.py --help
+
+# 小规模测试
+python customer_finder.py find \
+  --product "测试产品" \
+  --limit 10
+
+# 查看结果
+python customer_finder.py show leads.json
